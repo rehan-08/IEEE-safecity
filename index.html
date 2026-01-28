@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeCity Mumbai - Crime Analysis Dashboard</title>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
+    <style>
+        /* Additional inline styles for missing classes */
+        .sidebar-section {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .section-header h3 {
+            margin: 0;
+            font-size: 16px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .section-badge {
+            background: #0047AB;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .predictions-list, .patrols-list, .alerts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .patrol-control {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .patrol-control input {
+            width: 50px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .btn {
+            background: #0047AB;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .btn-sm {
+            padding: 3px 8px;
+            font-size: 12px;
+        }
+        
+        .map-controls {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .control-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .control-btn {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        
+        .control-btn.active {
+            background: #0047AB;
+            color: white;
+            border-color: #0047AB;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+        
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .legend-dot.critical { background: #FF0000; }
+        .legend-dot.high { background: #FF6B6B; }
+        .legend-dot.medium { background: #FFA500; }
+        .legend-dot.low { background: #34C759; }
+        
+        .map-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+            border-radius: 0 0 8px 8px;
+        }
+        
+        .map-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        
+        .overlay-card {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            font-size: 12px;
+        }
+        
+        .bottom-panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .panel-header h3 {
+            margin: 0;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .time-filter select {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .chart-container {
+            height: 150px;
+        }
+        
+        .app-footer {
+            background: #333;
+            color: white;
+            padding: 15px 20px;
+            margin-top: 20px;
+            border-radius: 0 0 10px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+        
+        .footer-left, .footer-right {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .footer-center {
+            flex: 1;
+            text-align: center;
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <i class="fas fa-shield-alt"></i>
+                <h1>SafeCity <span>Mumbai</span></h1>
+            </div>
+            <div class="header-info">
+                <div class="time">
+                    <i class="fas fa-clock"></i>
+                    <span id="current-time">00:00:00</span>
+                </div>
+                <button class="btn-refresh" onclick="loadData()">
+                    <i class="fas fa-sync"></i>
+                    Refresh Data
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3 id="total-crimes">0</h3>
+                <p>Total Crimes</p>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-fire"></i>
+                <h3 id="hotspot-count">0</h3>
+                <p>Hotspots</p>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-bolt"></i>
+                <h3 id="live-alerts">0</h3>
+                <p>Live Alerts</p>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-chart-line"></i>
+                <h3 id="prediction-accuracy">87%</h3>
+                <p>Prediction Accuracy</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-crystal-ball"></i> Risk Predictions</h3>
+                        <span class="section-badge">24h Forecast</span>
+                    </div>
+                    <div id="predictions-container" class="predictions-list">
+                        <!-- Predictions will load here -->
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-route"></i> Patrol Management</h3>
+                        <div class="patrol-control">
+                            <input type="number" id="patrol-input" value="3" min="1" max="10">
+                            <button class="btn btn-sm" onclick="updatePatrols()">
+                                <i class="fas fa-redo"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="patrols-container" class="patrols-list">
+                        <!-- Patrols will load here -->
+                    </div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                        Active Patrols: <span id="active-patrols">0</span>
+                    </div>
+                </div>
+                
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-exclamation-circle"></i> Recent Alerts</h3>
+                    </div>
+                    <div id="alerts-container" class="alerts-list">
+                        <!-- Alerts will load here -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <div class="content-area">
+                <!-- Map Controls -->
+                <div class="map-controls">
+                    <div class="control-group">
+                        <button class="control-btn" onclick="showHeatmap()" id="btn-heatmap">
+                            <i class="fas fa-fire"></i>
+                            <span>Heatmap</span>
+                        </button>
+                        <button class="control-btn active" onclick="showHotspots()" id="btn-hotspots">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>Hotspots</span>
+                        </button>
+                        <button class="control-btn" onclick="showPatrols()" id="btn-patrols">
+                            <i class="fas fa-car"></i>
+                            <span>Patrol Routes</span>
+                        </button>
+                        <button class="control-btn" onclick="showStations()" id="btn-stations">
+                            <i class="fas fa-building"></i>
+                            <span>Police Stations</span>
+                        </button>
+                    </div>
+                    
+                    <div class="legend">
+                        <div class="legend-item">
+                            <span class="legend-dot high"></span>
+                            <span>High Risk</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot medium"></span>
+                            <span>Medium Risk</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot low"></span>
+                            <span>Low Risk</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map Container -->
+                <div class="map-container">
+                    <div id="map"></div>
+                    <div class="map-overlay">
+                        <div class="overlay-card">
+                            <h4><i class="fas fa-info-circle"></i> Map Info</h4>
+                            <p>Click markers for details</p>
+                            <div class="map-stats">
+                                Crimes: <span id="map-crime-count">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-left">
+                <div class="update-info">
+                    <i class="fas fa-clock"></i>
+                    <span>Last Updated: <span id="last-update">--:--:--</span></span>
+                </div>
+                <div class="system-info">
+                    <i class="fas fa-server"></i>
+                    <span>Data Points: <span id="data-points">0</span></span>
+                </div>
+            </div>
+            
+            <div class="footer-center">
+                <span class="copyright">© 2024 SafeCity Mumbai | AI-Powered Crime Prevention</span>
+            </div>
+            
+            <div class="footer-right">
+                <div class="quick-actions">
+                    <button class="btn btn-sm" onclick="reportCrime()">
+                        <i class="fas fa-plus-circle"></i>
+                        Report Crime
+                    </button>
+                    <button class="btn btn-sm" onclick="downloadReport()">
+                        <i class="fas fa-download"></i>
+                        Export Data
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    
+    <script>
+        // Additional functions
+        function showStations() {
+            if (mapLayers.stations) {
+                map.removeLayer(mapLayers.stations);
+                mapLayers.stations.addTo(map);
+            }
+        }
+        
+        function reportCrime() {
+            alert('Crime reporting feature would open a form here.');
+        }
+        
+        function downloadReport() {
+            alert('Report download feature would trigger here.');
+        }
+        
+        function initializeApp() {
+            console.log('SafeCity Mumbai Dashboard initialized');
+            updateTime();
+            setInterval(updateTime, 1000);
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>
